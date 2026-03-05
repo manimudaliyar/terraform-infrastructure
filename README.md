@@ -1,49 +1,33 @@
-# Terraform Infrastructure on AWS
+# terraform-infrastructure
 
-## Overview
+![Terraform](https://img.shields.io/badge/Terraform-1.x-7B42BC?logo=terraform) ![AWS](https://img.shields.io/badge/AWS-Cloud-FF9900?logo=amazonaws) ![License](https://img.shields.io/badge/License-MIT-green)
 
-This project provisions a modular AWS infrastructure using Terraform.
-
-It demonstrates:
-
-- Environment isolation (dev, stage, prod)
-- Remote state management using S3 and DynamoDB
-- Reusable Terraform modules
-- Workspace-based state separation
-- Structured tagging and naming conventions
-
-The infrastructure includes:
-
-- VPC  
-- Public Subnet  
-- Internet Gateway  
-- Route Table and Association  
-- Security Group  
-- EC2 Instance  
-- Remote Backend (S3 + DynamoDB Locking)
+> Modular, multi-environment AWS infrastructure built with production-grade practices — remote state management, workspace isolation, and reusable modules across dev, stage, and prod.
 
 ---
 
-## Architecture
+## Technologies Used
 
-### Networking Layer
-- VPC
-- Public Subnet
-- Internet Gateway
-- Route Table
-- Security Group
+Terraform · AWS (VPC, EC2, S3, DynamoDB) · Terraform Workspaces · Remote Backend (S3 + DynamoDB Locking)
 
-### Compute Layer
-- EC2 instance deployed into public subnet
-- Uses existing AWS key pair
-- Environment-based tagging strategy
+---
 
-### Remote Backend
-- S3 bucket for Terraform state storage
-- DynamoDB table for state locking
-- Versioning enabled on S3 bucket
-- Encryption enabled
-- Lifecycle protection enabled for safety
+## Overview
+
+This project provisions a complete AWS infrastructure using Terraform with a focus on modularity and environment isolation. It demonstrates real-world patterns used in production cloud environments:
+
+- **Environment isolation** — dev, stage, prod via Terraform workspaces
+- **Remote state management** — S3 backend with DynamoDB locking and versioning
+- **Reusable modules** — networking and compute separated for scalability
+- **Structured tagging** — consistent naming and ownership across all resources
+
+### Infrastructure Components
+
+| Layer | Resources |
+|---|---|
+| Networking | VPC, Public Subnet, Internet Gateway, Route Table, Security Group |
+| Compute | EC2 instance with key-pair access, environment-based tagging |
+| Backend | S3 (state storage, versioning, encryption), DynamoDB (state locking) |
 
 ---
 
@@ -61,97 +45,60 @@ terraform-infrastructure/
 ├── prod.tfvars
 │
 ├── modules/
-│ ├── networking/
-│ │ ├── networks.tf
-│ │ ├── variables.tf
-│ │ ├── locals.tf
-│ │ └── outputs.tf
-│ │
-│ └── compute/
-│ ├── compute.tf
-│ ├── variables.tf
-│ └── locals.tf
+│   ├── networking/
+│   │   ├── networks.tf
+│   │   ├── variables.tf
+│   │   ├── locals.tf
+│   │   └── outputs.tf
+│   │
+│   └── compute/
+│       ├── compute.tf
+│       ├── variables.tf
+│       └── locals.tf
 │
 └── terraform-backend/
-└── main.tf
+    └── main.tf
 ```
 
 ---
 
-# Backend Bootstrapping (Must Be Executed First)
+## Getting Started
 
-The remote backend infrastructure must be created before deploying the main infrastructure.
+### Step 1 — Bootstrap the Remote Backend
 
-This avoids circular dependency issues during destroy operations.
+The backend must be created before deploying the main infrastructure to avoid circular dependency issues.
 
-## Step 1: Bootstrap Backend
-
-Navigate to the backend directory:
-
-```
+```bash
 cd terraform-backend
-```
-Initialize Terraform:
-```
 terraform init
-```
-Apply backend infrastructure:
-```
 terraform apply
 ```
 
-This creates:
+This provisions the S3 bucket and DynamoDB table used for state management.
 
-- S3 bucket for Terraform state
-- DynamoDB table for state locking
+### Step 2 — Initialize Main Infrastructure
 
----
-
-# Deploying Main Infrastructure
-
-## Step 2: Initialize Main Infrastructure
-
-Return to root directory:
-```
+```bash
 cd ..
-```
-
-Initialize Terraform (this connects to remote S3 backend):
-```
 terraform init
 ```
 
----
+### Step 3 — Create Workspace and Deploy
 
-## Step 3: Create and Select Workspace
-
-Create workspace for an environment:
-```
+```bash
 terraform workspace new dev
 terraform workspace select dev
-```
-
----
-
-## Step 4: Deploy Environment
-```
 terraform apply -var-file=dev.tfvars
 ```
 
-Repeat for other environments:
-```
-terraform workspace new stage
-terraform apply -var-file=stage.tfvars
-
-terraform workspace new prod
-terraform apply -var-file=prod.tfvars
-```
+Repeat for `stage` and `prod` environments.
 
 ---
 
-# Remote State Layout
+## Remote State Layout
 
-State files are stored per workspace:
+State files are isolated per workspace:
+
 ```
 env:/dev/terraform-infrastructure/terraform.tfstate
 env:/stage/terraform-infrastructure/terraform.tfstate
@@ -160,88 +107,49 @@ env:/prod/terraform-infrastructure/terraform.tfstate
 
 ---
 
-# Naming Convention
+## Naming & Tagging Convention
 
-Resources follow environment-based naming:
-```
-<environment>_VPC
-<environment>_IGW
-<environment>_Main-EC2
-```
-Example:
-```
-dev_VPC
-stage_IGW
-prod_Main-EC2
-```
+Resources follow environment-prefixed naming (e.g. `dev_VPC`, `prod_Main-EC2`) and include standardized tags:
+
+| Tag | Purpose |
+|---|---|
+| `Environment` | Identifies dev / stage / prod |
+| `Project` | Groups resources by project |
+| `Owner` | Ownership for cost allocation |
+| `ManagedBy` | Signals Terraform-managed resources |
 
 ---
 
-# Tagging Strategy
+## Security Considerations
 
-All resources include standardized tags:
-
-- Environment
-- Project
-- Owner
-- ManagedBy
-
-This ensures consistency across environments and improves maintainability.
+- SSH access restricted via configurable CIDR variable
+- Remote state encrypted at rest (S3 SSE)
+- DynamoDB state locking prevents concurrent modifications
+- `prevent_destroy` lifecycle rule protects backend S3 bucket
 
 ---
 
-# Destroying Infrastructure
+## Design Decisions
 
-To destroy a specific environment:
-```
-terraform workspace select dev
-terraform destroy -var-file=dev.tfvars
-```
-
-Note:
-
-The backend S3 bucket is protected using `prevent_destroy` and will not be deleted automatically.
+- **Backend separated from main infra** — prevents accidental state loss during destroy
+- **Modular architecture** — networking and compute decoupled for independent scaling
+- **Environment-specific tfvars** — clean separation of config per environment
+- **Centralized tagging via locals** — single source of truth for tags across modules
 
 ---
 
-# Security Considerations
+## Future Enhancements
 
-- SSH access controlled via configurable CIDR variable
-- Remote state locking via DynamoDB
-- Backend encryption enabled
-- Modular separation of networking and compute
-
----
-
-# Design Decisions
-
-- Backend separated from main infrastructure to prevent accidental state deletion
-- Modular architecture for scalability and reusability
-- Environment-specific tfvars for isolation
-- Workspace-based state separation
-- Centralized tagging strategy using locals
+- [ ] Private subnets and NAT Gateway
+- [ ] Application Load Balancer
+- [ ] Auto Scaling Group
+- [ ] IAM roles for EC2 (replacing key-based access)
+- [ ] CI/CD pipeline integration
+- [ ] S3 lifecycle rules for noncurrent version cleanup
 
 ---
 
-# Future Enhancements
+## Author
 
-- Private subnets and NAT Gateway
-- Application Load Balancer
-- Auto Scaling Group
-- IAM roles for EC2 instead of key-based access
-- CI/CD pipeline integration
-- S3 lifecycle rules for noncurrent version cleanup
-
----
-
-# Technologies Used
-
-- Terraform
-- AWS (VPC, EC2, S3, DynamoDB)
-- Terraform Workspaces
-
----
-
-# Author
-
-Manibharati Mudaliyar
+**Manibharati Mudaliyar**  
+[LinkedIn](https://linkedin.com/in/mmudaliyar) · [GitHub](https://github.com/manimudaliyar)
